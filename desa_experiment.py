@@ -3,17 +3,16 @@
 
 Usage from a system shell::
 
-    python example_experiment.py bbob
+    python desa_experiment.py bbob
 
-runs a full but short experiment on the bbob suite. The optimization
-algorithm used is determined by the `SOLVER` attribute in this file::
+runs a full but short experiment on the bbob suite.
 
-    python example_experiment.py bbob 20
+    python desa_experiment.py bbob 20
 
 runs the same experiment but with a budget of 20 * dimension
 f-evaluations::
 
-    python example_experiment.py bbob-biobj 1e3 1 20
+    python desa_experiment.py bbob-biobj 1e3 1 20
 
 runs the first of 20 batches with maximal budget of
 1000 * dimension f-evaluations on the bbob-biobj suite.
@@ -21,16 +20,15 @@ All batches must be run to generate a complete data set.
 
 Usage from a python shell:
 
->>> import example_experiment as ee
->>> ee.suite_name = "bbob-biobj"
->>> ee.SOLVER = ee.random_search  # which is default anyway
->>> ee.observer_options['algorithm_info'] = '"default of example_experiment.py"'
->>> ee.main(5, 1+9, 2, 300)  # doctest: +ELLIPSIS
+>>> import desa_experiment as de
+>>> de.suite_name = "bbob-biobj"
+>>> de.observer_options['algorithm_info'] = '"default of desa_experiment.py"'
+>>> de.main(5, 1+9, 2, 300)  # doctest: +ELLIPSIS
 Benchmarking solver...
 
 runs the 2nd of 300 batches with budget 5 * dimension and at most 9 restarts.
 
-Calling `example_experiment` without parameters prints this
+Calling `desa_experiment` without parameters prints this
 help and the available suite names.
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
@@ -43,6 +41,8 @@ import cocoex
 from scipy import optimize # for tests with fmin_cobyla
 from cocoex import Suite, Observer, log_level
 del absolute_import, division, print_function, unicode_literals
+
+from desa_algorithm import desa_solver
 
 verbose = 1
 
@@ -152,7 +152,7 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
         if solver.__name__ in ("random_search", ):
             solver(fun, fun.lower_bounds, fun.upper_bounds,
                    remaining_evals)
-        elif solver.__name__ == 'fmin' and solver.__globals__['__name__'] in ['cma', 'cma.evolution_strategy', 'cma.es']:
+        if solver.__name__ == 'fmin' and solver.__globals__['__name__'] in ['cma', 'cma.evolution_strategy', 'cma.es']:
             if x0[0] == center[0]:
                 sigma0 = 0.02
                 restarts_ = 0
@@ -179,7 +179,8 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
         #     CALL MY SOLVER, interfaces vary
 ##############################################################################
         else:
-            solver(fun, x0)
+            _, best = desa_solver(fun, fun.lower_bounds, fun.upper_bounds, )
+            # print("\n\nBEST VALUE    :   {}\n\n".format(best))
 
         if fun.evaluations + fun.evaluations_constraints >= max_evals or \
            fun.final_target_hit:
@@ -208,7 +209,9 @@ number_of_batches = 1  # allows to run everything in several batches
 current_batch = 1      # 1..number_of_batches
 ##############################################################################
 # By default we call SOLVER(fun, x0), but the INTERFACE CAN BE ADAPTED TO EACH SOLVER ABOVE
+# SOLVER = desa_solver
 SOLVER = random_search
+# SOLVER = cma.fmin
 # SOLVER = optimize.fmin_cobyla
 # SOLVER = my_solver # SOLVER = fmin_slsqp # SOLVER = cma.fmin
 suite_instance = "" # "year:2016"
