@@ -43,6 +43,7 @@ from cocoex import Suite, Observer, log_level
 del absolute_import, division, print_function, unicode_literals
 
 from desa_algorithm import desa_solver
+from scipy.optimize import differential_evolution
 
 verbose = 1
 
@@ -145,9 +146,9 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
 
     for restarts in range(int(max_runs)):
         remaining_evals = max_evals - fun.evaluations - fun.evaluations_constraints
-        x0 = center + (restarts > 0) * 0.8 * range_ * (
-                np.random.rand(fun.dimension) - 0.5)
-        fun(x0)  # can be incommented, if this is done by the solver
+        # x0 = center + (restarts > 0) * 0.8 * range_ * (
+        #         np.random.rand(fun.dimension) - 0.5)
+        # fun(x0)  # can be incommented, if this is done by the solver
 
         if solver.__name__ in ("random_search", ):
             solver(fun, fun.lower_bounds, fun.upper_bounds,
@@ -178,8 +179,17 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
         # elif solver.__name__ == ...:
         #     CALL MY SOLVER, interfaces vary
 ##############################################################################
+        elif solver.__name__ == 'differential_evolution':
+            lbounds = np.array(fun.lower_bounds).reshape(-1,1)
+            ubounds = np.array(fun.upper_bounds).reshape(-1,1)
+            # print ("\n")
+            # print (lbounds.shape)
+            # print (ubounds.shape)
+            bounds = np.concatenate([lbounds, ubounds], 1)
+            # print (bounds.shape)
+            solver(fun, bounds)
         else:
-            _, best = desa_solver(fun, fun.lower_bounds, fun.upper_bounds, )
+            history, best, best_val = desa_solver(fun, fun.lower_bounds, fun.upper_bounds, budget=remaining_evals)
             # print("\n\nBEST VALUE    :   {}\n\n".format(best))
 
         if fun.evaluations + fun.evaluations_constraints >= max_evals or \
@@ -209,13 +219,14 @@ number_of_batches = 1  # allows to run everything in several batches
 current_batch = 1      # 1..number_of_batches
 ##############################################################################
 # By default we call SOLVER(fun, x0), but the INTERFACE CAN BE ADAPTED TO EACH SOLVER ABOVE
-# SOLVER = desa_solver
-SOLVER = random_search
+SOLVER = desa_solver
+# SOLVER = differential_evolution
+# SOLVER = random_search
 # SOLVER = cma.fmin
 # SOLVER = optimize.fmin_cobyla
 # SOLVER = my_solver # SOLVER = fmin_slsqp # SOLVER = cma.fmin
 suite_instance = "" # "year:2016"
-suite_options = ""  # "dimensions: 2,3,5,10,20 "  # if 40 is not desired
+suite_options = "dimensions: 2,3,5,10,20"  # "dimensions: 2,3,5,10,20 "  # if 40 is not desired
 # for more suite options, see http://numbbo.github.io/coco-doc/C/#suite-parameters
 observer_options = ObserverOptions({  # is (inherited from) a dictionary
                     'algorithm_info': '"A SIMPLE RANDOM SEARCH ALGORITHM"', # CHANGE/INCOMMENT THIS!
