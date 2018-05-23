@@ -1,31 +1,36 @@
 import numpy as np
 import sys
 from matplotlib import pyplot as plt
+import logging
+
+logger = logging.getLogger()
+handler = logging.FileHandler('debug.log')
+formatter = logging.Formatter(
+        '%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
 
 # TODO: check common ranges for input parameter
 # TODO: replace prints with logger
 def desa_solver(func,
                 lbounds,
                 ubounds,
-                pop_size=15,
-                maxiter=-1,
-                mutation=0.7, # usually in [0, 2]
-                crosspoint=0.7,
+                pop_size=10,
+                mutation=0.5, # usually in [0, 2]
+                crosspoint=0.8,
                 start_temp=25000.0,
                 alpha=0.1,
                 end_temp=1e-9,
                 # check convergence for early stopping the algorithm
                 budget=1000):
 
+    logger.debug("budget  :  {}".format(budget))
     # TODO? check if all input parameters are what we expect
     dimensions = len(lbounds)
+    # maybe population_size should be independent from dimesionsx
     population_size = pop_size * dimensions
     temp = start_temp
-
-    if budget > 0:
-        evaluations_left = budget
-    else:
-        evaluations_left = 5000000
 
     # initialize population
     population = np.random.uniform(lbounds, ubounds, (population_size, dimensions))
@@ -37,9 +42,7 @@ def desa_solver(func,
     for i in range (0, last):
         idxs[i][i] = last
 
-    # TODO: check if bbob func object support evaluation from matrix
     # initial population evaluation
-    # values = np.array([func(x) for x in population])
     values = np.apply_along_axis(func, 1, population)
     budget -= population_size
     # find initial candidate for best
@@ -48,41 +51,43 @@ def desa_solver(func,
     best_val = values[best_idx]
 
     history = population
-
-    if maxiter <= 0:
-        maxiter = evaluations_left / population_size
+    maxiter = budget // population_size
     iter = 0
-    while evaluations_left >= population_size or iter < maxiter:
+    while budget >= population_size or iter < maxiter:
         iter += 1
 
         # end condition
         if func.final_target_hit:
-            # print("Final target reached in iteration: {}", iter)
-            break
-        
-        if evaluations_left < population_size:
-            # print("Evaluation budget used")
-            break
+            logger.debug('target hit in iteration {}  :  {}'.format(iter - 1, str(func)[:17]))
+            logger.debug("evaluations left  :  {}".format(budget))
+            return history, best, best_val
 
         # order of operation in genetic algorithm:
         # 1. mutation
         # 2. crossover
         # 3. selection
 
+        # strategy rand/1/bin
+
         # for each agent select 3 other agents
         selected = np.apply_along_axis(select_three, 1, idxs)
-        # differential mutation
-        mutants = population[selected[:,0]] + mutation * (population[selected[:,1]] - population[selected[:,2]])
+
+        # mutation
+        mutants = population[selected[:,0],:] + mutation * (population[selected[:,1],:] - population[selected[:,2],:])
+
         # clip values to fit into lower and upper bounds
-        # mutants = np.clip(mutants, lbounds, ubounds)
+        # think of better way of keeping in bounds, e.g. reflection
+        mutants = np.clip(mutants, lbounds, ubounds)
+
         # crossover
         candidates = crossover(mutants, population, crosspoint, dimensions)
-        # candidates = mutants
+
         # evaluate candidates
         candidate_values = np.apply_along_axis(func, 1, candidates)
-        # candidate_values = func(candidates)
+
         # update budget
         budget -= population_size
+
         # save better agents and their respective values
         succession_mask = np.less_equal(candidate_values, values)
         values = np.where(succession_mask, candidate_values, values)
@@ -99,6 +104,7 @@ def desa_solver(func,
         # population = np.where(annealing_mask, candidates, population)
         # # update current temperature
         # temp = cooling_schedule(temp, alpha)
+
         # search for global best
         current_best = np.argmin(values)
         # print "Current best : {}".format(values[current_best])
@@ -106,15 +112,10 @@ def desa_solver(func,
             best_val = values[current_best]
             best = population[current_best]
 
-        # history = np.append(history, population, axis=0)
-        # plt.plot(population[:,0], population[:,1], 'ro')
-        # plt.show()
-    # return best coordinates and value
+        history = np.append(history, population, axis=0)
 
-    # print(history.shape)
-    # plt.plot(history[:,0], history[:,1], 'ro', markersize=1)
-    # plt.show()
-
+    # return best coordinates and value\
+    logger.debug("target not hit (iterations {}) :  {}".format(iter, str(func)[:17]))
     return history, best, best_val
 
 ##################################################
@@ -128,6 +129,7 @@ def crossover(mutants, ancestors, crosspoint, dimensions):
 
 def select_three(array):
     return np.random.choice(array, 3, replace=False)
+    # return np.array([1,2,3])
 
 def simulated_annealing(prev_score, next_score, temperature):
     if temperature > 0:
@@ -147,9 +149,9 @@ class my_func:
     def __call__(self, x):
         # print(x)
         output = np.square(x)
-        output = np.sum(output, 1)
-        smallest = output[np.argmin(output)]
-        if smallest <= 4 * sys.float_info.epsilon:
+        output = np.sum(output, 0)
+        # smallest = output[np.argmin(output)]
+        if output <= 4 * sys.float_info.epsilon:
             self.final_target_hit = True
 
         # print(output)
@@ -164,3 +166,12 @@ if __name__ == "__main__":
         mutation=1,
         crosspoint=0.7,
         start_temp=10000)
+    pop = np.array([[1, 2, 3], [2, 3, 4], [4,5,6], [7,8,9], [4,3,2]])
+    arr = np.array([[0,1,2,3],[0,1,2,3]])
+    x = np.apply_along_axis(select_three, 1, arr)
+    # y = select_three(arr)
+    # z = np.array([x, y])
+    print(x)
+    m = pop[x]
+    print(m)
+    print(m[:,0] + m[:,1] - m[:,2])

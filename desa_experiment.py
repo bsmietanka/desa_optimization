@@ -43,6 +43,7 @@ from cocoex import Suite, Observer, log_level
 del absolute_import, division, print_function, unicode_literals
 
 from desa_algorithm import desa_solver
+from matplotlib import pyplot as plt
 from scipy.optimize import differential_evolution
 
 verbose = 1
@@ -182,15 +183,13 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
         elif solver.__name__ == 'differential_evolution':
             lbounds = np.array(fun.lower_bounds).reshape(-1,1)
             ubounds = np.array(fun.upper_bounds).reshape(-1,1)
-            # print ("\n")
-            # print (lbounds.shape)
-            # print (ubounds.shape)
             bounds = np.concatenate([lbounds, ubounds], 1)
-            # print (bounds.shape)
             solver(fun, bounds)
         else:
             history, best, best_val = desa_solver(fun, fun.lower_bounds, fun.upper_bounds, budget=remaining_evals)
             # print("\n\nBEST VALUE    :   {}\n\n".format(best))
+            # plt.plot(history[:,0], history[:,1], 'ro', markersize=1)
+            # plt.show()
 
         if fun.evaluations + fun.evaluations_constraints >= max_evals or \
            fun.final_target_hit:
@@ -226,7 +225,7 @@ SOLVER = desa_solver
 # SOLVER = optimize.fmin_cobyla
 # SOLVER = my_solver # SOLVER = fmin_slsqp # SOLVER = cma.fmin
 suite_instance = "" # "year:2016"
-suite_options = "dimensions: 2,3,5,10,20"  # "dimensions: 2,3,5,10,20 "  # if 40 is not desired
+suite_options = "dimensions: 2,3,5"  # "dimensions: 2,3,5,10,20 "  # if 40 is not desired
 # for more suite options, see http://numbbo.github.io/coco-doc/C/#suite-parameters
 observer_options = ObserverOptions({  # is (inherited from) a dictionary
                     'algorithm_info': '"A SIMPLE RANDOM SEARCH ALGORITHM"', # CHANGE/INCOMMENT THIS!
