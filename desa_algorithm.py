@@ -16,19 +16,21 @@ logger.setLevel(logging.DEBUG)
 def desa_solver(func,
                 lbounds,
                 ubounds,
-                pop_size=10,
-                mutation=0.5, # usually in [0, 2]
-                crosspoint=0.8,
-                start_temp=25000.0,
-                alpha=0.1,
+                pop_size=15,
+                maxiter=1000,
+                mutation=0.7, # usually in [0, 2]
+                crosspoint=0.8, # (0,1]
+                start_temp=25000.0, # 0 to disable simulated annealing
+                alpha=0.9,
                 end_temp=1e-9,
-                # check convergence for early stopping the algorithm
-                budget=1000):
+                budget=1000,
+                log=False):
 
-    logger.debug("budget  :  {}".format(budget))
-    # TODO? check if all input parameters are what we expect
+    if log:
+        logger.debug("budget  :  {}".format(budget))
+    # TODO?: check if all input parameters are what we expect
     dimensions = len(lbounds)
-    # maybe population_size should be independent from dimesionsx
+    # TODO?: maybe population_size should be independent from dimesions
     population_size = pop_size * dimensions
     temp = start_temp
 
@@ -36,7 +38,7 @@ def desa_solver(func,
     population = np.random.uniform(lbounds, ubounds, (population_size, dimensions))
     # population = lbounds + (ubounds - lbounds) * np.random.rand(population_size, dimensions)
 
-    #serves as a mask for selecting 3 random elements from population except current element
+    # serves as a mask for selecting 3 random elements from population except current element
     last = population_size - 1
     idxs = np.tile(np.arange(0,last), (population_size, 1))
     for i in range (0, last):
@@ -47,76 +49,77 @@ def desa_solver(func,
     budget -= population_size
     # find initial candidate for best
     best_idx = np.argmin(values)
+    current_best = best_idx
     best = population[best_idx]
     best_val = values[best_idx]
 
-    history = population
-    maxiter = budget // population_size
+    if log:
+        logger.debug("best value  :  {}".format(best_val))
+        history = population
     iter = 0
-    while budget >= population_size or iter < maxiter:
+    while budget > 0 and iter < maxiter:
         iter += 1
-
         # end condition
         if func.final_target_hit:
-            logger.debug('target hit in iteration {}  :  {}'.format(iter - 1, str(func)[:17]))
-            logger.debug("evaluations left  :  {}".format(budget))
+            if log:
+                logger.debug('target hit in iteration {}  :  {}'.format(iter - 1, str(func)[:17]))
+                logger.debug("evaluations left  :  {}".format(budget))
+            else:
+                history = []
             return history, best, best_val
 
-        # order of operation in genetic algorithm:
-        # 1. mutation
-        # 2. crossover
-        # 3. selection
-
+        # TODO: strategy selection
+        # selection and mutation
         # strategy rand/1/bin
-
-        # for each agent select 3 other agents
-        selected = np.apply_along_axis(select_three, 1, idxs)
-
-        # mutation
-        mutants = population[selected[:,0],:] + mutation * (population[selected[:,1],:] - population[selected[:,2],:])
+        # selected = np.apply_along_axis(select_three, 1, idxs)
+        # mutants = population[selected[:,2]] + mutation * (population[selected[:,0]] - population[selected[:,1]])
+        # strategy best/1/bin
+        selected = np.apply_along_axis(select_two, 1, idxs)
+        mutants = population[current_best] + mutation * (population[selected[:,0]] - population[selected[:,1]])
 
         # clip values to fit into lower and upper bounds
         # think of better way of keeping in bounds, e.g. reflection
         mutants = np.clip(mutants, lbounds, ubounds)
 
-        # crossover
+        # crossover and candidate evaluation
         candidates = crossover(mutants, population, crosspoint, dimensions)
-
-        # evaluate candidates
         candidate_values = np.apply_along_axis(func, 1, candidates)
-
-        # update budget
         budget -= population_size
 
         # save better agents and their respective values
         succession_mask = np.less_equal(candidate_values, values)
         values = np.where(succession_mask, candidate_values, values)
-        # needs a little reshape to save all coordinates of agent
+        # needs reshape to save all coordinates of agent
         succession_mask = np.tile(succession_mask.reshape(population_size, 1), dimensions)
         population = np.where(succession_mask, candidates, population)
 
         # simulated annealing - create mask to accept 
         # worse results based on current temperature
-        # annealing_mask = simulated_annealing(values, candidate_values, temp)
-        # values = np.where(annealing_mask, candidate_values, values)
-        # # reshape mask
-        # annealing_mask = np.tile(annealing_mask.reshape(population_size, 1), dimensions)
-        # population = np.where(annealing_mask, candidates, population)
-        # # update current temperature
-        # temp = cooling_schedule(temp, alpha)
+        if temp > 0:
+            annealing_mask = simulated_annealing(values, candidate_values, temp)
+            values = np.where(annealing_mask, candidate_values, values)
+            # reshape mask
+            annealing_mask = np.tile(annealing_mask.reshape(population_size, 1), dimensions)
+            population = np.where(annealing_mask, candidates, population)
+            # update current temperature
+            temp = cooling(temp, alpha, end_temp)
 
         # search for global best
         current_best = np.argmin(values)
-        # print "Current best : {}".format(values[current_best])
         if best_val > values[current_best]:
+            if log:
+                logger.debug("best value  :  {}".format(best_val))
             best_val = values[current_best]
             best = population[current_best]
 
-        history = np.append(history, population, axis=0)
+        if log:
+            history = np.append(history, population, axis=0)
 
-    # return best coordinates and value\
-    logger.debug("target not hit (iterations {}) :  {}".format(iter, str(func)[:17]))
-    return history, best, best_val
+    if log:
+        logger.debug("target not hit (iterations {}) :  {}".format(iter, str(func)[:17]))
+    else:
+        history = []
+    return best, best_val, history
 
 ##################################################
 ######           helper functions           ######
@@ -131,6 +134,9 @@ def select_three(array):
     return np.random.choice(array, 3, replace=False)
     # return np.array([1,2,3])
 
+def select_two(array):
+    return np.random.choice(array, 2, replace=False)
+
 def simulated_annealing(prev_score, next_score, temperature):
     if temperature > 0:
         rejecting_prob = np.exp( -np.absolute(np.subtract(next_score, prev_score, dtype=np.float64))/temperature )
@@ -138,8 +144,11 @@ def simulated_annealing(prev_score, next_score, temperature):
     else:
         return np.full(next_score.shape, False)
 
-def cooling_schedule(temp, alpha):
-    return alpha * temp
+def cooling(temp, alpha, end_temp):
+    if temp > end_temp:
+        return alpha * temp
+    else:
+        return 0
 
 class my_func:
 
@@ -157,21 +166,36 @@ class my_func:
         # print(output)
         return output
 
+def random_search(fun, lbounds, ubounds, budget):
+    """Efficient implementation of uniform random search between
+    `lbounds` and `ubounds`
+    """
+    lbounds, ubounds = np.array(lbounds), np.array(ubounds)
+    dim, x_min, f_min = len(lbounds), None, None
+    max_chunk_size = 1 + 4e4 / dim
+    while budget > 0:
+        chunk = int(max([1, min([budget, max_chunk_size])]))
+        # about five times faster than "for k in range(budget):..."
+        X = lbounds + (ubounds - lbounds) * np.random.rand(chunk, dim)
+        F = [fun(x) for x in X]
+        budget -= chunk
+        if fun.final_target_hit:
+            break
+    return x_min, budget
+
 
 if __name__ == "__main__":
     f = my_func()
-    desa_solver(f, [4,4], [5,5],
-        pop_size=int(sys.argv[1] if len(sys.argv) > 1 else 60),
-        budget=-1,
-        mutation=1,
-        crosspoint=0.7,
-        start_temp=10000)
-    pop = np.array([[1, 2, 3], [2, 3, 4], [4,5,6], [7,8,9], [4,3,2]])
-    arr = np.array([[0,1,2,3],[0,1,2,3]])
-    x = np.apply_along_axis(select_three, 1, arr)
-    # y = select_three(arr)
-    # z = np.array([x, y])
-    print(x)
-    m = pop[x]
-    print(m)
-    print(m[:,0] + m[:,1] - m[:,2])
+    history, _, _ = desa_solver(f, [-5,-5], [5,5],
+        pop_size=int(sys.argv[1] if len(sys.argv) > 1 else 20),
+        budget=100000,
+        maxiter = 1000,
+        mutation=0.7,
+        crosspoint=0.8,
+        start_temp=10000,
+        log=True)
+    _, budget1 = random_search(f, [-5,-5], [5,5], 100000)
+    print(budget1)
+    print(history.shape)
+    plt.plot(history[:,0], history[:,1], 'ro', markersize=1)
+    plt.show()

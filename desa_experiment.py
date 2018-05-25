@@ -45,6 +45,7 @@ del absolute_import, division, print_function, unicode_literals
 from desa_algorithm import desa_solver
 from matplotlib import pyplot as plt
 from scipy.optimize import differential_evolution
+import argparse
 
 verbose = 1
 
@@ -151,48 +152,44 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
         #         np.random.rand(fun.dimension) - 0.5)
         # fun(x0)  # can be incommented, if this is done by the solver
 
-        if solver.__name__ in ("random_search", ):
+        if solver.__name__ == "random_search":
             solver(fun, fun.lower_bounds, fun.upper_bounds,
                    remaining_evals)
-        if solver.__name__ == 'fmin' and solver.__globals__['__name__'] in ['cma', 'cma.evolution_strategy', 'cma.es']:
-            if x0[0] == center[0]:
-                sigma0 = 0.02
-                restarts_ = 0
-            else:
-                x0 = "%f + %f * np.random.rand(%d)" % (
-                        center[0], 0.8 * range_[0], fun.dimension)
-                sigma0 = 0.2
-                restarts_ = 6 * (observer_options.as_string.find('IPOP') >= 0)
+        # if solver.__name__ == 'fmin' and solver.__globals__['__name__'] in ['cma', 'cma.evolution_strategy', 'cma.es']:
+        #     if x0[0] == center[0]:
+        #         sigma0 = 0.02
+        #         restarts_ = 0
+        #     else:
+        #         x0 = "%f + %f * np.random.rand(%d)" % (
+        #                 center[0], 0.8 * range_[0], fun.dimension)
+        #         sigma0 = 0.2
+        #         restarts_ = 6 * (observer_options.as_string.find('IPOP') >= 0)
 
-            solver(fun, x0, sigma0 * range_[0], restarts=restarts_,
-                   options=dict(scaling=range_/range_[0], maxfevals=remaining_evals,
-                                termination_callback=lambda es: fun.final_target_hit,
-                                verb_log=0, verb_disp=0, verbose=-9))
-        elif solver.__name__ == 'fmin_slsqp':
-            solver(fun, x0, iter=1 + remaining_evals / fun.dimension,
-                   iprint=-1)
-        elif solver.__name__ in ("fmin_cobyla", ):
-            x0 = fun.initial_solution
-            solver(fun, x0, lambda x: -fun.constraint(x), maxfun=remaining_evals,
-                   disp=0, rhoend=1e-9)
-############################ ADD HERE ########################################
-        # ### IMPLEMENT HERE THE CALL TO ANOTHER SOLVER/OPTIMIZER ###
-        # elif solver.__name__ == ...:
-        #     CALL MY SOLVER, interfaces vary
-##############################################################################
+        #     solver(fun, x0, sigma0 * range_[0], restarts=restarts_,
+        #            options=dict(scaling=range_/range_[0], maxfevals=remaining_evals,
+        #                         termination_callback=lambda es: fun.final_target_hit,
+        #                         verb_log=0, verb_disp=0, verbose=-9))
+        # elif solver.__name__ == 'fmin_slsqp':
+        #     solver(fun, x0, iter=1 + remaining_evals / fun.dimension,
+        #            iprint=-1)
+        # elif solver.__name__ in ("fmin_cobyla", ):
+        #     x0 = fun.initial_solution
+        #     solver(fun, x0, lambda x: -fun.constraint(x), maxfun=remaining_evals,
+        #            disp=0, rhoend=1e-9)
         elif solver.__name__ == 'differential_evolution':
             lbounds = np.array(fun.lower_bounds).reshape(-1,1)
             ubounds = np.array(fun.upper_bounds).reshape(-1,1)
             bounds = np.concatenate([lbounds, ubounds], 1)
-            solver(fun, bounds)
-        else:
-            history, best, best_val = desa_solver(fun, fun.lower_bounds, fun.upper_bounds, budget=remaining_evals)
-            # print("\n\nBEST VALUE    :   {}\n\n".format(best))
-            # plt.plot(history[:,0], history[:,1], 'ro', markersize=1)
-            # plt.show()
+            solver(fun, bounds, strategy=strategy, mutation=mutation, popsize=population_size,
+                   recombination=crosspoint)
+        elif solver.__name__ == 'desa_solver':
+            desa_solver(fun, fun.lower_bounds, fun.upper_bounds, budget=remaining_evals,
+                        crosspoint=crosspoint, mutation=mutation, start_temp=temperature,
+                        alpha=alpha, pop_size=population_size)
 
-        if fun.evaluations + fun.evaluations_constraints >= max_evals or \
-           fun.final_target_hit:
+        if fun.evaluations + fun.evaluations_constraints >= max_evals:
+            break
+        elif fun.final_target_hit:
             break
         # quit if fun.evaluations did not increase
         still_remaining = max_evals - fun.evaluations - fun.evaluations_constraints
@@ -205,38 +202,43 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
             break
     return 1 + restarts  # number of (almost) independent launches of `solver`
 
-# ===============================================
-# set up: CHANGE HERE SOLVER AND FURTHER SETTINGS AS DESIRED
-# ===============================================
-######################### CHANGE HERE ########################################
-# CAVEAT: this might be modified from input args
-suite_name = "bbob"  # always overwritten when called from system shell
-                     # see available choices via cocoex.known_suite_names
-budget = 2  # maxfevals = budget x dimension ### INCREASE budget WHEN THE DATA CHAIN IS STABLE ###
+
+#==============================================================================#
+#==============================================================================#
+### coco test suite options ###
+suite_name = "bbob"  # see available choices via cocoex.known_suite_names
+budget = 2  # maxfevals = budget x dimension
 max_runs = 1e9  # number of (almost) independent trials per problem instance
 number_of_batches = 1  # allows to run everything in several batches
 current_batch = 1      # 1..number_of_batches
-##############################################################################
-# By default we call SOLVER(fun, x0), but the INTERFACE CAN BE ADAPTED TO EACH SOLVER ABOVE
-SOLVER = desa_solver
-# SOLVER = differential_evolution
-# SOLVER = random_search
-# SOLVER = cma.fmin
-# SOLVER = optimize.fmin_cobyla
-# SOLVER = my_solver # SOLVER = fmin_slsqp # SOLVER = cma.fmin
 suite_instance = "" # "year:2016"
-suite_options = "dimensions: 2,3,5"  # "dimensions: 2,3,5,10,20 "  # if 40 is not desired
+suite_options = "dimensions: 2,3,5"  # "dimensions: 2,3,5,10,20" # if 40 is not desired
 # for more suite options, see http://numbbo.github.io/coco-doc/C/#suite-parameters
 observer_options = ObserverOptions({  # is (inherited from) a dictionary
-                    'algorithm_info': '"A SIMPLE RANDOM SEARCH ALGORITHM"', # CHANGE/INCOMMENT THIS!
+                    'algorithm_info': '"A SIMPLE RANDOM SEARCH ALGORITHM"',
                     # 'algorithm_name': '',  # default already provided from SOLVER name
                     # 'result_folder': '',  # default already provided from several global vars
                    })
-######################### END CHANGE HERE ####################################
+#==============================================================================#
+### solver options ###
+solvers = { random_search.__name__ : random_search,
+            desa_solver.__name__ : desa_solver,
+            differential_evolution.__name__ : differential_evolution}
+dimensions = {5 : "2,3,5", 10 : "2,3,5,10", 20 : "2,3,5,10,20", 40 : "2,3,5,10,20,40"}
+population_size = 15
+temperature = 25000
+alpha = 0.8
+mutation = 0.7
+crosspoint = 0.8
+strategy="best1bin"
+SOLVER = desa_solver
+# SOLVER = cma.fmin
+# SOLVER = optimize.fmin_cobyla
+# SOLVER = my_solver # SOLVER = fmin_slsqp # SOLVER = cma.fmin
+#==============================================================================#
+#==============================================================================#
 
-# ===============================================
-# run (main)
-# ===============================================
+
 def main(budget=budget,
          max_runs=max_runs,
          current_batch=current_batch,
@@ -269,26 +271,41 @@ def main(budget=budget,
           '    cocopp.main("%s") \n'
           'from a python shell' % (2 * (observer.result_folder,)))
 
-# ===============================================
 if __name__ == '__main__':
-    """read input parameters and call `main()`"""
-    if len(sys.argv) < 2 or sys.argv[1] in ["--help", "-h"]:
-            print(__doc__)
-            print("Recognized suite names: " + str(cocoex.known_suite_names))
-            sys.exit(0)
-    suite_name = sys.argv[1]
-    if suite_name not in cocoex.known_suite_names:
-        print('WARNING: "%s" not in known names %s' %
-                (suite_name, str(cocoex.known_suite_names)))
-    if len(sys.argv) > 2:
-        budget = float(sys.argv[2])
-    if len(sys.argv) > 3:
-        current_batch = int(sys.argv[3])
-    if len(sys.argv) > 4:
-        number_of_batches = int(sys.argv[4])
-    if len(sys.argv) > 5:
-        messages = ['Argument "%s" disregarded (only 4 arguments are recognized).' % sys.argv[i]
-            for i in range(5, len(sys.argv))]
-        messages.append('See "python example_experiment.py -h" for help.')
-        raise ValueError('\n'.join(messages))
+
+    parser = argparse.ArgumentParser(description='Script for evaluating optimization algorithms on bbob test suite')
+    parser.add_argument('solver', nargs='?', default='desa_solver',
+                        help='name of solver function to evaluate',
+                        choices=solvers.keys())
+    parser.add_argument('suite', nargs='?', default="bbob",
+                        choices=cocoex.known_suite_names,
+                        help='name of test suite defined in coco module')
+    parser.add_argument('-b', '--budget', type=int, default=1e4,
+                        help='number of function evaluations for each problem')
+    parser.add_argument('-d', '--dimensions', type=int, default=10,
+                        help='maximum problem dimensionality',
+                        choices=[5,10,20,40])
+    parser.add_argument('-c', '--crosspoint', type=float, default=0.8,
+                        help='crosspoint value (should be in [0, 1] - 1 means no crossover)')
+    parser.add_argument('-m', '--mutation', type=float, default=0.7,
+                        help='mutation coefficient (should be in [0, 2])')
+    parser.add_argument('-t', '--temperature', type=float, default=25000,
+                        help='start temperature')
+    parser.add_argument('-a', '--alpha', type=float, default=0.8,
+                        help='temperature degradation coefficient')
+    parser.add_argument('-s', '--strategy', choices=["rand1bin", "best1bin"], default='best1bin',
+                        help="differential algorithm mutation and crossover strategy")
+    parser.add_argument('-p', '--population', type=int, default=15,
+                        help='population size')
+    args = parser.parse_args()
+    suite_name = args.suite
+    budget = float(args.budget)
+    SOLVER = solvers[args.solver]
+    suite_options = "dimensions : {}".format(dimensions[args.dimensions])
+    temperature = args.temperature
+    alpha = args.alpha
+    mutation = args.mutation
+    crosspoint = args.crosspoint
+    strategy = args.strategy
+    population_size = args.population
     main(budget, max_runs, current_batch, number_of_batches)
