@@ -277,9 +277,9 @@ if __name__ == '__main__':
     parser.add_argument('solver', nargs='?', default='desa_solver',
                         help='name of solver function to evaluate',
                         choices=solvers.keys())
-    parser.add_argument('suite', nargs='?', default="bbob",
-                        choices=cocoex.known_suite_names,
-                        help='name of test suite defined in coco module')
+    # parser.add_argument('suite', nargs='?', default="bbob",
+    #                     choices=cocoex.known_suite_names,
+    #                     help='name of test suite defined in coco module')
     parser.add_argument('-b', '--budget', type=int, default=1e4,
                         help='number of function evaluations for each problem')
     parser.add_argument('-d', '--dimensions', type=int, default=10,
@@ -298,7 +298,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--population', type=int, default=15,
                         help='population size')
     args = parser.parse_args()
-    suite_name = args.suite
+    # suite_name = args.suite
     budget = float(args.budget)
     SOLVER = solvers[args.solver]
     suite_options = "dimensions : {}".format(dimensions[args.dimensions])

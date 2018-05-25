@@ -2,6 +2,7 @@ import numpy as np
 import sys
 from matplotlib import pyplot as plt
 import logging
+from scipy.optimize import rosen
 
 logger = logging.getLogger()
 handler = logging.FileHandler('debug.log')
@@ -24,8 +25,11 @@ def desa_solver(func,
                 alpha=0.9,
                 end_temp=1e-9,
                 budget=1000,
-                log=False):
+                log=False,
+                seed=False):
 
+    if seed:
+        np.random.seed(12345)
     if log:
         logger.debug("budget  :  {}".format(budget))
     # TODO?: check if all input parameters are what we expect
@@ -66,7 +70,7 @@ def desa_solver(func,
                 logger.debug("evaluations left  :  {}".format(budget))
             else:
                 history = []
-            return history, best, best_val
+            return best, best_val, history
 
         # TODO: strategy selection
         # selection and mutation
@@ -127,12 +131,10 @@ def desa_solver(func,
 
 def crossover(mutants, ancestors, crosspoint, dimensions):
     crossover_mask = np.random.random_sample(mutants.shape) < crosspoint
-    # print(crossover_mask)
     return np.where(crossover_mask, mutants, ancestors)
 
 def select_three(array):
     return np.random.choice(array, 3, replace=False)
-    # return np.array([1,2,3])
 
 def select_two(array):
     return np.random.choice(array, 2, replace=False)
@@ -150,21 +152,55 @@ def cooling(temp, alpha, end_temp):
     else:
         return 0
 
-class my_func:
+class sphere:
 
     def __init__(self):
         self.final_target_hit = False
+        self.lbounds = [-5,-5]
+        self.ubounds = [5,5]
 
     def __call__(self, x):
-        # print(x)
         output = np.square(x)
         output = np.sum(output, 0)
-        # smallest = output[np.argmin(output)]
         if output <= 4 * sys.float_info.epsilon:
             self.final_target_hit = True
-
-        # print(output)
         return output
+
+class ackeley:
+
+    def __init__(self):
+        self.final_target_hit = False
+        self.lbounds = [-5,-5]
+        self.ubounds = [5,5]
+
+    def __call__(self, x):
+        arg1 = -0.2 * np.sqrt(0.5 * (x[0] ** 2 + x[1] ** 2))
+        arg2 = 0.5 * (np.cos(2. * np.pi * x[0]) + np.cos(2. * np.pi * x[1]))
+        return -20. * np.exp(arg1) - np.exp(arg2) + 20. + np.e
+
+class rosenbrock:
+
+    def __init__(self):
+        self.final_target_hit = False
+        self.lbounds = [-5,-5]
+        self.ubounds = [5,5]
+
+    def __call__(self, x):
+        return rosen(x)
+
+class himmelblau:
+
+    def __init__(self):
+        self.final_target_hit = False
+        self.lbounds = [-5,-5]
+        self.ubounds = [5,5]
+    
+    def __call__(self, x):
+        X = x[0]
+        Y = x[1]
+        a = X*X + Y - 11
+        b = X + Y*Y - 7
+        return a*a + b*b
 
 def random_search(fun, lbounds, ubounds, budget):
     """Efficient implementation of uniform random search between
@@ -185,7 +221,7 @@ def random_search(fun, lbounds, ubounds, budget):
 
 
 if __name__ == "__main__":
-    f = my_func()
+    f = sphere()
     history, _, _ = desa_solver(f, [-5,-5], [5,5],
         pop_size=int(sys.argv[1] if len(sys.argv) > 1 else 20),
         budget=100000,
@@ -194,8 +230,5 @@ if __name__ == "__main__":
         crosspoint=0.8,
         start_temp=10000,
         log=True)
-    _, budget1 = random_search(f, [-5,-5], [5,5], 100000)
-    print(budget1)
-    print(history.shape)
     plt.plot(history[:,0], history[:,1], 'ro', markersize=1)
     plt.show()
