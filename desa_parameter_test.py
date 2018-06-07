@@ -41,6 +41,7 @@ if __name__ == "__main__":
                     log=True, seed=True)
 
     plt.plot(history[:,0], history[:,1], 'ro', markersize=1)
-    plt.title("{}, {} = {},\nbest: {} = {}".format(title,
-                args.parameter, args.value, best, best_val))
+    plt.title("{}".format(title) +
+        (", {} = {},".format(args.parameter, args.value) if args.parameter is not None else "") +
+        "\nbest: {} = {}".format(best, best_val))
     plt.savefig("results/{}_{}_{}.png".format(args.function, args.parameter, args.value))

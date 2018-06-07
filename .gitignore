@@ -6,3 +6,4 @@ coco/
 exdata/
 *.pyc
 ppdata/
+results/
