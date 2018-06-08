@@ -181,7 +181,8 @@ def coco_optimize(solver, fun, max_evals, max_runs=1e9):
             ubounds = np.array(fun.upper_bounds).reshape(-1,1)
             bounds = np.concatenate([lbounds, ubounds], 1)
             solver(fun, bounds, strategy=strategy, mutation=mutation, popsize=population_size,
-                   recombination=crosspoint)
+                   recombination=crosspoint, polish=False,
+                   maxiter=int(budget * len(lbounds) /(population_size * len(lbounds)) + 1), tol=0.)
         elif solver.__name__ == 'desa_solver':
             desa_solver(fun, fun.lower_bounds, fun.upper_bounds, budget=remaining_evals,
                         crosspoint=crosspoint, mutation=mutation, start_temp=temperature,

@@ -35,16 +35,16 @@ for f in ['sphere', 'ackeley', 'rosenbrock', 'himmelblau']:
 # without stopping this script
 # TODO?: compare with other algorithms
 try:
-    os.system("python desa_experiment.py -d 20")
+    os.system("python desa_experiment.py -d 20 -b 10000")
 except:
     pass
 
 try:
-    os.system("python desa_experiment.py -d 20 differential_evolution")
+    os.system("python desa_experiment.py -d 20 -b 10000 differential_evolution")
 except:
     pass
 
 try:
-    os.system("python desa_experiment.py -d 20 random_search")
+    os.system("python desa_experiment.py -d 20 -b 10000 random_search")
 except:
     pass
